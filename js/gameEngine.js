@@ -171,11 +171,30 @@ class GameEngine {
       itemType = fruits[Math.floor(Math.random() * fruits.length)];
     }
 
+    // 1. Move Monkey First
+    const monkeyEl = document.getElementById("monkey");
+    let centerXPercent = 50;
+    if (zone === "LEFT") centerXPercent = 16.66;
+    if (zone === "RIGHT") centerXPercent = 83.33;
+
+    // Move monkey to center of zone (minus half width which is 30px)
+    if (monkeyEl) {
+      monkeyEl.style.left = `calc(${centerXPercent}% - 30px)`;
+
+      // Change Appearance based on item
+      if (itemType.type === 'bomb') {
+        monkeyEl.innerText = "😎"; // Sunglasses for Bomb
+      } else {
+        monkeyEl.innerText = "🐵"; // Normal for Fruit
+      }
+    }
+
+    // 2. Spawn Item
     const item = {
       id: Math.random().toString(36).substr(2, 9),
       ...itemType,
       zone: zone,
-      y: -50, // Start above screen
+      y: 60, // Start below the monkey (top: 10px + height 50px)
       element: document.createElement('div')
     };
 
@@ -183,13 +202,12 @@ class GameEngine {
     item.element.className = "item";
     item.element.innerText = item.emoji;
 
-    let leftPercent = "50%";
-    if (zone === "LEFT") leftPercent = "16.66%";
-    if (zone === "RIGHT") leftPercent = "83.33%";
-
-    item.element.style.left = `calc(${leftPercent} - 25px)`; // Center 50px item
+    // Align item with zone center (minus half width 25px)
+    item.element.style.left = `calc(${centerXPercent}% - 25px)`;
     item.element.style.top = item.y + "px";
 
+    // Small delay to make it look like it's dropped? 
+    // Usually simultaneous is file, but let's just append
     this.itemsContainer.appendChild(item.element);
     this.items.push(item);
   }
