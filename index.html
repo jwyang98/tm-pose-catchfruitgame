@@ -1,30 +1,60 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Teachable Machine Pose Model</title>
-    <link rel="stylesheet" href="./css/style.css" />
-  </head>
-  <body>
-    <h1>Teachable Machine Pose Model</h1>
-    <div class="button-container">
-      <button type="button" id="startBtn" onclick="init()">Start</button>
-      <button type="button" id="stopBtn" onclick="stop()" disabled>Stop</button>
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Fruit Catch Game</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+
+<body>
+  <div id="main-layout">
+    <div id="game-wrapper">
+      <!-- Game Info Header -->
+      <header id="game-header">
+        <div class="stat-box">Score: <span id="score">0</span></div>
+        <div class="stat-box">Level: <span id="level">1</span></div>
+        <div class="stat-box">Time: <span id="time">60</span></div>
+        <div class="stat-box">Lives: <span id="lives">❤️❤️❤️</span></div>
+      </header>
+
+      <!-- Main Game Area -->
+      <div id="game-area">
+        <!-- Background Zones -->
+        <div class="zone left-zone"></div>
+        <div class="zone center-zone"></div>
+        <div class="zone right-zone"></div>
+
+        <!-- Dynamic Elements -->
+        <div id="basket">🧺</div>
+        <div id="items-container"></div>
+
+        <!-- Game Over / Start Overlay -->
+        <div id="game-overlay" class="visible">
+          <h1 id="overlay-title">Fruit Catch 🍎</h1>
+          <p id="overlay-desc">얼굴을 움직여 바구니를 이동하세요!</p>
+          <div id="final-score-display" style="display: none;"></div>
+          <button id="start-btn">GAME START</button>
+        </div>
+      </div>
     </div>
-    <div class="canvas-container">
+
+    <!-- Webcam Preview (Side) -->
+    <div id="webcam-container">
       <canvas id="canvas"></canvas>
-      <div id="max-prediction"></div>
+      <div id="pose-label">Ready</div>
     </div>
-    <div id="label-container"></div>
+  </div>
 
-    <!-- Teachable Machine 라이브러리 -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
 
-    <!-- 애플리케이션 모듈 -->
-    <script src="./js/stabilizer.js"></script>
-    <script src="./js/poseEngine.js"></script>
-    <script src="./js/gameEngine.js"></script>
-    <script src="./js/main.js"></script>
-  </body>
+  <!-- App Modules -->
+  <script src="./js/stabilizer.js"></script>
+  <script src="./js/poseEngine.js"></script>
+  <script src="./js/gameEngine.js"></script>
+  <script src="./js/main.js"></script>
+</body>
+
 </html>

@@ -18,24 +18,40 @@ class PoseEngine {
   }
 
   /**
-   * 모델과 웹캠 초기화
-   * @param {Object} options - 옵션 { size, flip }
+   * Load only the model
    */
-  async init(options = {}) {
-    const { size = 200, flip = true } = options;
+  async loadModel() {
+    if (typeof tmPose === 'undefined') {
+      throw new Error("Teachable Machine Library not loaded. Check Internet connection.");
+    }
 
-    // 모델 로드
     const modelURL = this.modelURL + "model.json";
     const metadataURL = this.modelURL + "metadata.json";
 
-    // Teachable Machine 포즈 모델 로드
     this.model = await tmPose.load(modelURL, metadataURL);
     this.maxPredictions = this.model.getTotalClasses();
+    return this.maxPredictions;
+  }
 
-    // 웹캠 설정
+  /**
+   * Setup Webcam only
+   */
+  async setupWebcam(options = {}) {
+    const { size = 200, flip = true } = options;
+
     this.webcam = new tmPose.Webcam(size, size, flip);
-    await this.webcam.setup();
-    await this.webcam.play();
+    await this.webcam.setup(); // Request access
+    await this.webcam.play();  // Start stream
+
+    return this.webcam;
+  }
+
+  /**
+   * Legacy init (wraps both)
+   */
+  async init(options = {}) {
+    await this.loadModel();
+    await this.setupWebcam(options);
 
     return {
       maxPredictions: this.maxPredictions,

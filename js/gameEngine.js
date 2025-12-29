@@ -1,162 +1,277 @@
 /**
  * gameEngine.js
- * 게임 단계, 명령, 점수, 제한시간 등 게임 규칙 전체를 담당
- *
- * 포즈 인식을 활용한 게임 로직을 관리하는 엔진
- * (현재는 기본 템플릿이므로 향후 게임 로직 추가 가능)
+ * Fruit Catch Game Logic
+ * Handles game state, item spawning, collision detection, and UI updates.
  */
 
 class GameEngine {
   constructor() {
     this.score = 0;
     this.level = 1;
-    this.timeLimit = 0;
-    this.currentCommand = null;
-    this.isGameActive = false;
-    this.gameTimer = null;
-    this.onCommandChange = null; // 명령 변경 콜백
-    this.onScoreChange = null; // 점수 변경 콜백
-    this.onGameEnd = null; // 게임 종료 콜백
-  }
+    this.timeLeft = 60;
+    this.lives = 3;
+    this.state = "STOPPED"; // 'STOPPED', 'RUNNING', 'GAMEOVER'
+    this.basketZone = "CENTER"; // 'LEFT', 'CENTER', 'RIGHT'
+    this.items = [];
+    this.lastSpawnTime = 0;
+    this.spawnInterval = 2000; // ms
+    this.baseSpeed = 3; // px per frame
+    this.gameLoopId = null;
+    this.timerInterval = null;
 
-  /**
-   * 게임 시작
-   * @param {Object} config - 게임 설정 { timeLimit, commands }
-   */
-  start(config = {}) {
-    this.isGameActive = true;
-    this.score = 0;
-    this.level = 1;
-    this.timeLimit = config.timeLimit || 60; // 기본 60초
-    this.commands = config.commands || []; // 게임 명령어 배열
+    // DOM Elements
+    this.scoreEl = document.getElementById("score");
+    this.levelEl = document.getElementById("level");
+    this.timeEl = document.getElementById("time");
+    this.livesEl = document.getElementById("lives");
+    this.basketEl = document.getElementById("basket");
+    this.itemsContainer = document.getElementById("items-container");
+    this.overlay = document.getElementById("game-overlay");
+    this.overlayTitle = document.getElementById("overlay-title");
+    this.overlayDesc = document.getElementById("overlay-desc");
+    this.finalScoreDisplay = document.getElementById("final-score-display");
+    this.startBtn = document.getElementById("start-btn");
 
-    if (this.timeLimit > 0) {
-      this.startTimer();
+    // Event Listener for Start Button
+    if (this.startBtn) {
+      this.startBtn.addEventListener("click", () => this.start());
     }
 
-    // 첫 번째 명령 발급 (게임 모드일 경우)
-    if (this.commands.length > 0) {
-      this.issueNewCommand();
-    }
+    // Item Definitions
+    this.itemTypes = [
+      { type: "apple", emoji: "🍎", score: 100 },
+      { type: "pear", emoji: "🍐", score: 150 },
+      { type: "orange", emoji: "🍊", score: 200 },
+      { type: "bomb", emoji: "💣", score: 0 },
+    ];
   }
 
-  /**
-   * 게임 중지
-   */
-  stop() {
-    this.isGameActive = false;
-    this.clearTimer();
+  start() {
+    if (this.state === "RUNNING") return;
 
-    if (this.onGameEnd) {
-      this.onGameEnd(this.score, this.level);
-    }
-  }
+    this.resetGame();
+    this.state = "RUNNING";
+    this.overlay.classList.add("hidden");
 
-  /**
-   * 타이머 시작
-   */
-  startTimer() {
-    this.gameTimer = setInterval(() => {
-      this.timeLimit--;
+    // Start Loops
+    this.lastSpawnTime = performance.now();
+    this.gameLoopId = requestAnimationFrame((timestamp) => this.loop(timestamp));
 
-      if (this.timeLimit <= 0) {
-        this.stop();
+    // Start Timer
+    this.timerInterval = setInterval(() => {
+      this.timeLeft--;
+      this.updateUI();
+
+      // Level Up every 20 seconds
+      if ((60 - this.timeLeft) % 20 === 0 && this.timeLeft !== 60) {
+        this.levelUp();
+      }
+
+      if (this.timeLeft <= 0) {
+        this.gameOver("Time's Up!");
       }
     }, 1000);
   }
 
-  /**
-   * 타이머 정리
-   */
-  clearTimer() {
-    if (this.gameTimer) {
-      clearInterval(this.gameTimer);
-      this.gameTimer = null;
+  stop() {
+    this.state = "STOPPED";
+    cancelAnimationFrame(this.gameLoopId);
+    clearInterval(this.timerInterval);
+  }
+
+  resetGame() {
+    this.score = 0;
+    this.level = 1;
+    this.timeLeft = 60;
+    this.lives = 3;
+    this.items = [];
+    this.spawnInterval = 2000;
+    this.baseSpeed = 3;
+    this.itemsContainer.innerHTML = "";
+    this.updateUI();
+    this.setBasketZone("CENTER");
+  }
+
+  gameOver(reason) {
+    this.stop();
+    this.state = "GAMEOVER";
+
+    this.overlayTitle.innerText = "GAME OVER";
+    this.overlayDesc.innerText = reason;
+    this.finalScoreDisplay.style.display = "block";
+    this.finalScoreDisplay.innerText = `Final Score: ${this.score}`;
+    this.startBtn.innerText = "RESTART";
+    this.overlay.classList.remove("hidden");
+  }
+
+  levelUp() {
+    this.level++;
+    this.baseSpeed += 1; // Increase speed
+    this.spawnInterval = Math.max(500, 2000 - (this.level - 1) * 300); // Decrease interval
+    this.updateUI();
+
+    // Visual indicator (optional)
+    const originalColor = this.levelEl.parentElement.style.backgroundColor;
+    this.levelEl.parentElement.style.backgroundColor = "#ffeb3b";
+    setTimeout(() => {
+      this.levelEl.parentElement.style.backgroundColor = originalColor;
+    }, 500);
+  }
+
+  // Called from PoseEngine
+  setBasketZone(zone) {
+    // zone: 'LEFT', 'CENTER', 'RIGHT'
+    this.basketZone = zone;
+
+    // Calculate Position (Percent)
+    let leftPercent = "50%"; // Default Center
+    if (zone === "LEFT") leftPercent = "16.66%";
+    if (zone === "RIGHT") leftPercent = "83.33%";
+
+    // Update Basket CSS. Center the element (subtract half width)
+    // Using calc in CSS: left: calc(16.66% - 40px)
+    // But we set inline style directly
+    this.basketEl.style.left = `calc(${leftPercent} - 40px)`;
+  }
+
+  loop(timestamp) {
+    if (this.state !== "RUNNING") return;
+
+    const deltaTime = timestamp - this.lastTime || 16;
+    this.lastTime = timestamp;
+
+    this.spawnSystem(timestamp);
+    this.updateItems();
+    this.checkCollisions();
+
+    this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
+  }
+
+  spawnSystem(timestamp) {
+    if (timestamp - this.lastSpawnTime > this.spawnInterval) {
+      this.spawnItem();
+      this.lastSpawnTime = timestamp;
     }
   }
 
-  /**
-   * 새로운 명령 발급
-   */
-  issueNewCommand() {
-    if (this.commands.length === 0) return;
+  spawnItem() {
+    // Pick zone
+    const zones = ["LEFT", "CENTER", "RIGHT"];
+    const zone = zones[Math.floor(Math.random() * zones.length)];
 
-    const randomIndex = Math.floor(Math.random() * this.commands.length);
-    this.currentCommand = this.commands[randomIndex];
+    // Pick Item Type
+    // Bomb probability increases with level
+    const bombChance = Math.min(0.1 + (this.level * 0.05), 0.4); // Max 40%
+    let itemType;
 
-    if (this.onCommandChange) {
-      this.onCommandChange(this.currentCommand);
-    }
-  }
-
-  /**
-   * 포즈 인식 결과 처리
-   * @param {string} detectedPose - 인식된 포즈 이름
-   */
-  onPoseDetected(detectedPose) {
-    if (!this.isGameActive) return;
-
-    // 현재 명령과 일치하는지 확인
-    if (this.currentCommand && detectedPose === this.currentCommand) {
-      this.addScore(10); // 점수 추가
-      this.issueNewCommand(); // 새로운 명령 발급
-    }
-  }
-
-  /**
-   * 점수 추가
-   * @param {number} points - 추가할 점수
-   */
-  addScore(points) {
-    this.score += points;
-
-    // 레벨업 로직 (예: 100점마다)
-    if (this.score >= this.level * 100) {
-      this.level++;
+    if (Math.random() < bombChance) {
+      itemType = this.itemTypes.find(i => i.type === 'bomb');
+    } else {
+      const fruits = this.itemTypes.filter(i => i.type !== 'bomb');
+      itemType = fruits[Math.floor(Math.random() * fruits.length)];
     }
 
-    if (this.onScoreChange) {
-      this.onScoreChange(this.score, this.level);
-    }
-  }
-
-  /**
-   * 명령 변경 콜백 등록
-   * @param {Function} callback - (command) => void
-   */
-  setCommandChangeCallback(callback) {
-    this.onCommandChange = callback;
-  }
-
-  /**
-   * 점수 변경 콜백 등록
-   * @param {Function} callback - (score, level) => void
-   */
-  setScoreChangeCallback(callback) {
-    this.onScoreChange = callback;
-  }
-
-  /**
-   * 게임 종료 콜백 등록
-   * @param {Function} callback - (finalScore, finalLevel) => void
-   */
-  setGameEndCallback(callback) {
-    this.onGameEnd = callback;
-  }
-
-  /**
-   * 현재 게임 상태 반환
-   */
-  getGameState() {
-    return {
-      isActive: this.isGameActive,
-      score: this.score,
-      level: this.level,
-      timeRemaining: this.timeLimit,
-      currentCommand: this.currentCommand
+    const item = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...itemType,
+      zone: zone,
+      y: -50, // Start above screen
+      element: document.createElement('div')
     };
+
+    // Create DOM Element
+    item.element.className = "item";
+    item.element.innerText = item.emoji;
+
+    let leftPercent = "50%";
+    if (zone === "LEFT") leftPercent = "16.66%";
+    if (zone === "RIGHT") leftPercent = "83.33%";
+
+    item.element.style.left = `calc(${leftPercent} - 25px)`; // Center 50px item
+    item.element.style.top = item.y + "px";
+
+    this.itemsContainer.appendChild(item.element);
+    this.items.push(item);
+  }
+
+  updateItems() {
+    const gameHeight = document.getElementById("game-area").offsetHeight;
+
+    this.items.forEach((item, index) => {
+      item.y += this.baseSpeed;
+      item.element.style.top = item.y + "px";
+
+      // Remove if out of bounds (Missed)
+      if (item.y > gameHeight) {
+        this.handleMiss(item, index);
+      }
+    });
+  }
+
+  handleMiss(item, index) {
+    // Remove element
+    item.element.remove();
+    this.items.splice(index, 1);
+
+    // If fruit, lose life
+    if (item.type !== 'bomb') {
+      this.lives--;
+      this.updateUI();
+      if (this.lives <= 0) {
+        this.gameOver("Too many fruits missed!");
+      }
+    }
+  }
+
+  checkCollisions() {
+    // Simple Collision: Basket Y is fixed at bottom 20px. 
+    // Basket Height 80px. Game Area Height approx 90vh.
+    // Let's assume Basket top edge is at bottom: 100px (20px bottom + 80px height)
+    // Actually, standard collision:
+    // Basket Y range: [containerHeight - 100, containerHeight - 20]
+
+    const gameArea = document.getElementById("game-area");
+    const containerHeight = gameArea.offsetHeight;
+    const basketTop = containerHeight - 100; // rough estimate
+    const basketBottom = containerHeight - 20;
+
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i];
+      const itemBottom = item.y + 50; // item height 50
+      const itemTop = item.y;
+
+      // Check Y Collision (overlapping vertical range)
+      if (itemBottom >= basketTop && itemTop <= basketBottom) {
+        // Check Zone Collision
+        if (item.zone === this.basketZone) {
+          this.handleCatch(item, i);
+        }
+      }
+    }
+  }
+
+  handleCatch(item, index) {
+    // Remove item
+    item.element.remove();
+    this.items.splice(index, 1);
+
+    if (item.type === 'bomb') {
+      this.gameOver("You caught a Bomb!");
+    } else {
+      this.score += item.score;
+      this.updateUI();
+
+      // Optional: Add floating text effect?
+    }
+  }
+
+  updateUI() {
+    this.scoreEl.innerText = this.score;
+    this.levelEl.innerText = this.level;
+    this.timeEl.innerText = this.timeLeft;
+    this.livesEl.innerText = "❤️".repeat(Math.max(0, this.lives));
   }
 }
 
-// 전역으로 내보내기
+// Export
 window.GameEngine = GameEngine;
